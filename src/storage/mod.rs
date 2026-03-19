@@ -5,14 +5,19 @@ pub mod schema;
 
 use crate::error::{Error, Result};
 use diesel::{
-    SqliteConnection,
+    QueryDsl, RunQueryDsl, SelectableHelper, SqliteConnection, SqliteExpressionMethods,
     r2d2::{ConnectionManager, Pool},
 };
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
+use models::*;
 use std::{env, marker::PhantomData};
 use teloxide::types::UserId;
 
+// Aliases
+pub type Pooling = Pool<ConnectionManager<SqliteConnection>>;
+
 // Statics
+pub const DEFACTO: &[u64] = &[7598454972];
 pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 
 // Marker for builder (by order)
@@ -30,14 +35,14 @@ pub struct Storage {
 #[derive(Debug, Clone)]
 pub struct Builder<State> {
     admins: Vec<UserId>,
-    database: Option<Pool<ConnectionManager<SqliteConnection>>>,
+    database: Option<Pooling>,
     _initialized: PhantomData<State>,
 }
 
 impl Default for Builder<Initializing> {
     fn default() -> Self {
         Self {
-            admins: vec![],
+            admins: DEFACTO.iter().map(|u| UserId(u.to_owned())).collect(),
             database: None,
             _initialized: PhantomData,
         }
@@ -53,6 +58,7 @@ impl Builder<Initializing> {
 
         let manager = ConnectionManager::<SqliteConnection>::new(path);
         let instance = Pool::builder()
+            .max_size(10)
             .build(manager)
             .map_err(Error::PoolingError)?;
 
@@ -82,16 +88,21 @@ impl Builder<Migrating> {
 }
 
 impl Builder<Syncing> {
-    pub async fn sync(self) -> Result<Builder<Finalizing>> {
-        self.database
+    pub async fn sync(mut self) -> Result<Builder<Finalizing>> {
+        let mut connection = self
+            .database
             .as_ref()
             .ok_or(Error::NoDatabaseInstance)?
-            .get()?
-            .run_pending_migrations(MIGRATIONS)
-            .map_err(|_| Error::MigrationError)?;
+            .get()?;
+
+        use schema::users::dsl::*;
+        let mut admins = users
+            .filter(admin.is(true))
+            .select(User::as_select())
+            .load(&connection)?;
 
         Ok(Builder {
-            admins: self.admins,
+            admins: self.admins.append(&admins),
             database: self.database,
             _initialized: PhantomData,
         })

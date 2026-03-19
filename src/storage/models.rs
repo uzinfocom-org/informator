@@ -1,4 +1,5 @@
 use diesel::prelude::*;
+use teloxide::types::UserId;
 
 #[derive(Queryable, Selectable)]
 #[diesel(table_name = super::schema::posts)]
@@ -15,4 +16,10 @@ pub struct Post {
 pub struct User {
     pub id: i64,
     pub admin: bool,
+}
+
+impl User {
+    pub fn to_telegram_id(self) -> UserId {
+        UserId(self.id as u64)
+    }
 }
