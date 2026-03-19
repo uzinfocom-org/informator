@@ -1,50 +1,59 @@
-flake: {
+flake:
+{
   config,
   lib,
   pkgs,
   ...
-}: let
+}:
+let
   cfg = config.services."${manifest.name}-bot";
   bot = flake.packages.${pkgs.stdenv.hostPlatform.system}.default;
 
   # Manifest via Cargo.toml
   manifest = (pkgs.lib.importTOML ./Cargo.toml).package;
 
-  genArgs = {cfg}: let
-    token = cfg.token;
-    domain = cfg.webhook.domain or "";
-    mode =
-      if cfg.webhook.enable
-      then "webhook"
-      else "polling";
-    port =
-      if cfg.webhook.enable
-      then "--port ${toString cfg.webhook.port}"
-      else "";
-  in
-    lib.strings.concatStringsSep " " [mode token domain port];
+  genArgs =
+    { cfg }:
+    let
+      token = cfg.token;
+      domain = cfg.webhook.domain or "";
+      mode = if cfg.webhook.enable then "webhook" else "polling";
+      port = if cfg.webhook.enable then "--port ${toString cfg.webhook.port}" else "";
+    in
+    lib.strings.concatStringsSep " " [
+      mode
+      token
+      domain
+      port
+    ];
 
   caddy = lib.mkIf (cfg.enable && cfg.webhook.enable && cfg.webhook.proxy == "caddy") {
-    services.caddy.virtualHosts = lib.debug.traceIf (builtins.isNull cfg.webhook.domain) "webhook.domain can't be null, please specicy it properly!" {
-      "${cfg.webhook.domain}" = {
-        extraConfig = ''
-          reverse_proxy 127.0.0.1:${toString cfg.webhook.port}
-        '';
-      };
-    };
+    services.caddy.virtualHosts =
+      lib.debug.traceIf (isNull cfg.webhook.domain)
+        "webhook.domain can't be null, please specicy it properly!"
+        {
+          "${cfg.webhook.domain}" = {
+            extraConfig = ''
+              reverse_proxy 127.0.0.1:${toString cfg.webhook.port}
+            '';
+          };
+        };
   };
 
   nginx = lib.mkIf (cfg.enable && cfg.webhook.enable && cfg.webhook.proxy == "nginx") {
-    services.nginx.virtualHosts = lib.debug.traceIf (builtins.isNull cfg.webhook.domain) "webhook.domain can't be null, please specicy it properly!" {
-      "${cfg.webhook.domain}" = {
-        addSSL = true;
-        enableACME = true;
-        locations."/" = {
-          proxyPass = "http://127.0.0.1:${toString cfg.webhook.port}";
-          proxyWebsockets = true;
+    services.nginx.virtualHosts =
+      lib.debug.traceIf (isNull cfg.webhook.domain)
+        "webhook.domain can't be null, please specicy it properly!"
+        {
+          "${cfg.webhook.domain}" = {
+            addSSL = true;
+            enableACME = true;
+            locations."/" = {
+              proxyPass = "http://127.0.0.1:${toString cfg.webhook.port}";
+              proxyWebsockets = true;
+            };
+          };
         };
-      };
-    };
   };
 
   service = lib.mkIf cfg.enable {
@@ -54,22 +63,22 @@ flake: {
       group = cfg.group;
     };
 
-    users.groups.${cfg.group} = {};
+    users.groups.${cfg.group} = { };
 
     systemd.services."${manifest.name}-bot" = {
       description = "${manifest.description}";
-      documentation = ["${manifest.repository}"];
+      documentation = [ "${manifest.repository}" ];
 
-      after = ["network-online.target"];
-      wants = ["network-online.target"];
-      wantedBy = ["multi-user.target"];
+      after = [ "network-online.target" ];
+      wants = [ "network-online.target" ];
+      wantedBy = [ "multi-user.target" ];
 
       serviceConfig = {
         # Core
         User = cfg.user;
         Group = cfg.group;
         Restart = "always";
-        ExecStart = "${lib.getBin cfg.package}/bin/${manifest.name} ${genArgs {cfg = cfg;}}";
+        ExecStart = "${lib.getBin cfg.package}/bin/${manifest.name} ${genArgs { cfg = cfg; }}";
         StateDirectory = cfg.user;
         StateDirectoryMode = "0750";
 
@@ -79,7 +88,7 @@ flake: {
           "AF_INET"
           "AF_INET6"
         ];
-        DeviceAllow = ["/dev/stdin r"];
+        DeviceAllow = [ "/dev/stdin r" ];
         DevicePolicy = "strict";
         IPAddressAllow = "localhost";
         LockPersonality = true;
@@ -96,7 +105,7 @@ flake: {
         ProtectKernelModules = true;
         ProtectKernelTunables = true;
         ProtectSystem = "strict";
-        ReadOnlyPaths = ["/"];
+        ReadOnlyPaths = [ "/" ];
         RemoveIPC = true;
         RestrictAddressFamilies = [
           "AF_NETLINK"
@@ -120,7 +129,9 @@ flake: {
 
   asserts = lib.mkIf cfg.enable {
     warnings = [
-      (lib.mkIf (cfg.webhook.enable && cfg.webhook.domain == null) "services.${manifest.name}.bot.webhook.domain must be set in order to properly generate certificate!")
+      (lib.mkIf (cfg.webhook.enable && cfg.webhook.domain == null)
+        "services.${manifest.name}.bot.webhook.domain must be set in order to properly generate certificate!"
+      )
     ];
 
     assertions = [
@@ -130,7 +141,8 @@ flake: {
       }
     ];
   };
-in {
+in
+{
   options = with lib; {
     services."${manifest.name}-bot" = {
       enable = mkEnableOption ''
@@ -150,7 +162,8 @@ in {
         };
 
         proxy = mkOption {
-          type = with types;
+          type =
+            with types;
             nullOr (enum [
               "nginx"
               "caddy"
@@ -204,5 +217,10 @@ in {
     };
   };
 
-  config = lib.mkMerge [asserts service caddy nginx];
+  config = lib.mkMerge [
+    asserts
+    service
+    caddy
+    nginx
+  ];
 }

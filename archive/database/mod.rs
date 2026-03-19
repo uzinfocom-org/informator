@@ -9,7 +9,8 @@ use turso::{Builder as TBuilder, Database as TDatabase};
 
 // Marker for builder (by order)
 pub struct Initializing;
-pub struct Boostrapping;
+pub struct Migrating;
+pub struct Instantiated;
 
 #[derive(Debug, Clone)]
 pub struct Database(TDatabase);

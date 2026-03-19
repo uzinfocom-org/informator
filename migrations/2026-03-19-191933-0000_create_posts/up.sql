@@ -1,0 +1,6 @@
+-- Your SQL goes here
+CREATE TABLE posts (
+  id INTEGER NOT NULL PRIMARY KEY,
+  chat UNSIGNED BIG INT NOT NULL,
+  selection TEXT NOT NULL
+)

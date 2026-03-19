@@ -1,8 +1,9 @@
 pub mod help;
 pub mod start;
 
-use crate::{bot::Command, database::Database, error::Insult};
 use std::sync::Arc;
+
+use crate::{bot::Command, error::Insult, storage::Storage};
 use teloxide::{prelude::*, types::*};
 
 pub async fn commands(bot: Bot, me: Me, msg: Message, cmd: Command) -> Insult<()> {
@@ -14,6 +15,6 @@ pub async fn commands(bot: Bot, me: Me, msg: Message, cmd: Command) -> Insult<()
     Ok(())
 }
 
-pub async fn announcements(bot: Bot, me: Me, msg: Message, database: Arc<Database>) -> Insult<()> {
+pub async fn announcements(bot: Bot, me: Me, msg: Message, db: Arc<Storage>) -> Insult<()> {
     Ok(())
 }

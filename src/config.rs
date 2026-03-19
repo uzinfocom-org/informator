@@ -1,6 +1,6 @@
-use Field::{Domain, Token};
 use std::fmt::{Display, Formatter};
 use std::path::PathBuf;
+use Field::{Domain, Token};
 
 pub enum ConfigError {
     NonExistent(String),

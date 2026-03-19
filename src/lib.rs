@@ -3,9 +3,9 @@
 
 pub mod bot;
 pub mod config;
-pub mod database;
 pub mod error;
 pub mod functions;
+pub mod storage;
 
 use clap::{Parser, Subcommand};
 use std::path::PathBuf;
@@ -27,6 +27,10 @@ pub enum Commands {
         /// Telegram bot token
         #[arg(required = true)]
         token: PathBuf,
+
+        /// Sqlite database file
+        #[arg(required = true)]
+        database: PathBuf,
     },
     /// Start bot in Webhook mode with given variables
     // #[command(arg_required_else_help = true)]
@@ -34,6 +38,10 @@ pub enum Commands {
         /// Telegram bot token
         #[arg(required = true)]
         token: PathBuf,
+
+        /// Sqlite database file
+        #[arg(required = true)]
+        database: PathBuf,
 
         /// Domain url to set webhook address
         #[arg(required = true)]

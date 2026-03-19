@@ -1,9 +1,9 @@
 {
-  description = "A beginning of an awesome project bootstrapped with github:bleur-org/templates";
+  description = "A telegram bot for relaying messages to groups.";
 
   inputs = {
     # Stable for keeping thins clean
-    # nixpkgs.url = "github:nixos/nixpkgs/nixos-25.05";
+    # nixpkgs.url = "github:nixos/nixpkgs/nixos-25.11";
 
     # Fresh and new for testing
     nixpkgs.url = "github:nixos/nixpkgs?ref=nixos-unstable";
@@ -12,31 +12,36 @@
     flake-parts.url = "github:hercules-ci/flake-parts";
   };
 
-  outputs = {
-    self,
-    flake-parts,
-    ...
-  } @ inputs:
-    flake-parts.lib.mkFlake {inherit inputs;} ({...}: {
-      systems = [
-        "x86_64-linux"
-        "aarch64-linux"
-        "x86_64-darwin"
-        "aarch64-darwin"
-      ];
-      flake = {
+  outputs =
+    {
+      self,
+      flake-parts,
+      ...
+    }@inputs:
+    flake-parts.lib.mkFlake { inherit inputs; } (
+      { ... }:
+      {
+        systems = [
+          "x86_64-linux"
+          "aarch64-linux"
+          "aarch64-darwin"
+        ];
+        flake = {
           # NixOS module (deployment)
           nixosModules.bot = import ./module.nix self;
-      };
-      perSystem = {pkgs, ...}: {
-        # Nix script formatter
-        formatter = pkgs.nixfmt-tree;
+        };
+        perSystem =
+          { pkgs, ... }:
+          {
+            # Nix script formatter
+            formatter = pkgs.nixfmt-tree;
 
-        # Development environment
-        devShells.default = import ./shell.nix self {inherit pkgs;};
+            # Development environment
+            devShells.default = import ./shell.nix self { inherit pkgs; };
 
-        # Output package
-        packages.default = pkgs.callPackage ./. {inherit pkgs;};
-      };
-    });
+            # Output package
+            packages.default = pkgs.callPackage ./. { inherit pkgs; };
+          };
+      }
+    );
 }

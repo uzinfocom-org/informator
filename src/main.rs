@@ -2,14 +2,26 @@ use clap::Parser;
 use informator::bot::dispatch;
 use informator::clog;
 use informator::config::{Config, Field};
-use informator::database::Database;
+use informator::error::Result;
+use informator::storage::Storage;
 use informator::{Cli, Commands};
-use std::error::Error;
 use std::sync::Arc;
 use teloxide::{prelude::*, update_listeners::webhooks};
 
 #[tokio::main]
-async fn main() -> Result<(), Box<dyn Error>> {
+async fn main() -> Result<()> {
+    match executor_task().await {
+        Ok(_) => {}
+        Err(e) => {
+            eprintln!("error: {}", e);
+            std::process::exit(1)
+        }
+    }
+
+    Ok(())
+}
+
+async fn executor_task() -> Result<()> {
     // Starter packs
     pretty_env_logger::init();
     log::info!("Starting Bot: {}", env!("CARGO_PKG_NAME"));
@@ -17,24 +29,27 @@ async fn main() -> Result<(), Box<dyn Error>> {
     // Global instances
     let mut config = Config::default();
 
-    // Database instance
-    let database = Arc::new(
-        Database::new()
-            .connect("informator.db")
-            .await? // are we connected?
-            .bootstrap()
-            .await? // are we good to get/set data?
-            .build()?,
-    );
-
-    // Dependencies
-    let deps = dptree::deps![database];
-
     // Args
     let args = Cli::parse();
 
     match args.command {
-        Commands::Polling { token } => {
+        Commands::Polling { token, database } => {
+            // Database instance
+            let storage = Arc::new(
+                Storage::new()
+                    .connect(database.to_str())
+                    .await?
+                    .migrate()
+                    .await?
+                    .sync()
+                    .await?
+                    .build()?,
+            );
+
+            // Dependencies
+            let deps = dptree::deps![storage];
+
+            // Bot instance
             match config.read(token, Field::Token) {
                 Ok(_) => clog("Config", "Successfully read the token variable"),
                 Err(e) => panic!("{}", e),
@@ -50,9 +65,25 @@ async fn main() -> Result<(), Box<dyn Error>> {
         }
         Commands::Webhook {
             token,
+            database,
             domain,
             port,
         } => {
+            // Database instance
+            let storage = Arc::new(
+                Storage::new()
+                    .connect(database.to_str())
+                    .await?
+                    .migrate()
+                    .await?
+                    .sync()
+                    .await?
+                    .build()?,
+            );
+
+            // Dependencies
+            let deps = dptree::deps![storage];
+
             match config.read(token, Field::Token) {
                 Ok(_) => clog("Config", "Successfully read the token variable"),
                 Err(e) => panic!("{}", e),
@@ -63,6 +94,7 @@ async fn main() -> Result<(), Box<dyn Error>> {
                 Err(e) => panic!("{}", e),
             }
 
+            // Bot instance
             let bot = Bot::new(config.token);
             let mut dispatcher = dispatch(&bot, deps);
 
@@ -86,6 +118,22 @@ async fn main() -> Result<(), Box<dyn Error>> {
             Ok(())
         }
         Commands::Env => {
+            // Database instance
+            let storage = Arc::new(
+                Storage::new()
+                    .connect(None)
+                    .await?
+                    .migrate()
+                    .await?
+                    .sync()
+                    .await?
+                    .build()?,
+            );
+
+            // Dependencies
+            let deps = dptree::deps![storage];
+
+            // Bot instance
             let bot = Bot::from_env();
             let mut dispatcher = dispatch(&bot, deps);
 

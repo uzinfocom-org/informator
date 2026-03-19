@@ -1,4 +1,4 @@
-use std::num::ParseIntError;
+use std::{env::VarError, num::ParseIntError};
 
 use thiserror::Error;
 
@@ -15,8 +15,14 @@ pub type Insult<T> = std::result::Result<T, Insane>;
 pub enum Error {
     #[error("Are you SURE that database is initialized?!")]
     NoDatabaseInstance,
+    #[error("database url where?! {0}")]
+    NoDatabaseUrl(#[from] VarError),
     #[error("trouble with db connection: {0}")]
-    DatabaseError(#[from] turso::Error),
+    DatabaseError(#[from] diesel::ConnectionError),
+    #[error("trouble while creating pool of connections: {0}")]
+    PoolingError(#[from] r2d2::Error),
+    #[error("trouble while migrating migrations.")]
+    MigrationError,
     #[error("trouble with parsing number: {0}")]
     ParseIntError(#[from] ParseIntError),
     #[error("is this really a valid db path?")]
