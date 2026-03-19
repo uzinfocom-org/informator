@@ -3,7 +3,10 @@
 pub mod models;
 pub mod schema;
 
-use crate::error::{Error, Result};
+use crate::{
+    error::{Error, Result},
+    storage::schema::users,
+};
 use diesel::{
     Connection, QueryDsl, RunQueryDsl, SelectableHelper, SqliteConnection, SqliteExpressionMethods,
     r2d2::{ConnectionManager, Pool},
@@ -167,7 +170,31 @@ impl Storage {
         Ok(&self.admins)
     }
 
-    pub fn add_admin(&mut self) -> Result<()> {
-        Ok(())
+    pub fn add_admin(&mut self, user: UserId) -> Result<User> {
+        self.sync()?;
+
+        if DEFACTO.contains(&user.0) {
+            return Err(Error::ProxyError(
+                "User already is a DEFACTO admin!".to_string(),
+            ));
+        }
+
+        if self.admins.contains(&user) {
+            return Err(Error::ProxyError(
+                "User already is in admins list!".to_string(),
+            ));
+        }
+
+        self.conn()?
+            .transaction(|c| {
+                diesel::insert_into(users::table)
+                    .values(User {
+                        id: user.0 as i64,
+                        admin: true,
+                    })
+                    .returning(User::as_returning())
+                    .get_result(c)
+            })
+            .map_err(Error::DatabaseError)
     }
 }

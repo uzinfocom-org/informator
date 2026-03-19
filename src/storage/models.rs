@@ -11,12 +11,13 @@ pub struct Post {
     pub selection: String,
 }
 
-#[derive(Queryable, Selectable, Serialize, Deserialize)]
+#[derive(Queryable, Selectable, Serialize, Deserialize, Insertable)]
 #[diesel(table_name = super::schema::users)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct User {
     pub id: i64,
     pub admin: bool,
+    pub language: String,
 }
 
 impl User {

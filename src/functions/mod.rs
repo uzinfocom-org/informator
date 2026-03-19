@@ -1,3 +1,4 @@
+pub mod add;
 pub mod help;
 pub mod start;
 pub mod sync;
@@ -10,15 +11,12 @@ pub async fn commands(bot: Bot, me: Me, msg: Message, cmd: Command, db: Storage)
         Command::Start => crate::functions::start::command(&bot, &msg).await,
         Command::Help => crate::functions::help::command(&bot, &msg, &cmd).await,
         Command::Sync => crate::functions::sync::command(&bot, &msg, db).await,
+        Command::Add => crate::functions::add::command(&bot, &msg, db).await,
     };
 
     Ok(())
 }
 
 pub async fn announcements(bot: Bot, me: Me, msg: Message, mut db: Storage) -> Insult<()> {
-    db.sync()?;
-
-    println!("Hewwoooo");
-
     Ok(())
 }

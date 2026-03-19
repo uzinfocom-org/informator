@@ -26,6 +26,13 @@ pub enum Error {
     ParseIntError(#[from] ParseIntError),
     #[error("is this really a valid db path?")]
     InvalidPath,
+    #[error("{0}")] // passing string for a reason
+    ProxyError(String),
+
+    /// Don't you even dare to touch this one!!!
+    /// Must be avoided at any cost for sanity preservation.
+    #[error("baba yaga is bullshitting somewhere: {0}")]
+    Unknown(String),
 }
 
 // To pass the Insult's criterias

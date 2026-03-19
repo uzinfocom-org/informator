@@ -12,6 +12,7 @@ diesel::table! {
     users (id) {
         id -> BigInt,
         admin -> Bool,
+        language -> Text,
     }
 }
 

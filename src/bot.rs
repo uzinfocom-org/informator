@@ -17,6 +17,9 @@ pub enum Command {
 
     /// Synchronize admins with cache
     Sync,
+
+    /// Add an admin user
+    Add,
 }
 
 pub fn handler() -> UpdateHandler<Insane> {
