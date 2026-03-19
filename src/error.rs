@@ -1,5 +1,4 @@
 use std::{env::VarError, num::ParseIntError};
-
 use thiserror::Error;
 
 /// Normal fucking Result

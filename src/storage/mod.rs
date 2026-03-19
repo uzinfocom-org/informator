@@ -10,10 +10,13 @@ use diesel::{
 };
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 use models::*;
+use r2d2::PooledConnection;
 use std::{env, marker::PhantomData};
 use teloxide::types::UserId;
+
 // Aliases
 pub type Pooling = Pool<ConnectionManager<SqliteConnection>>;
+pub type Pooled = PooledConnection<ConnectionManager<SqliteConnection>>;
 
 // Statics
 pub const DEFACTO: &[u64] = &[7598454972];
@@ -37,6 +40,11 @@ pub struct Builder<State> {
     database: Option<Pooling>,
     _initialized: PhantomData<State>,
 }
+
+// To be able to do black magic through threading jobs
+// Please, don't even think about wrapping storage to Arc!
+unsafe impl Send for Storage {}
+unsafe impl Sync for Storage {}
 
 impl Default for Builder<Initializing> {
     fn default() -> Self {
@@ -109,7 +117,7 @@ impl Builder<Syncing> {
             .collect();
 
         Ok(Builder {
-            admins,
+            admins: [self.admins, admins].concat(),
             database: self.database,
             _initialized: PhantomData,
         })
@@ -128,5 +136,38 @@ impl Builder<Finalizing> {
 impl Storage {
     pub fn new() -> Builder<Initializing> {
         Builder::<Initializing>::default()
+    }
+
+    pub fn conn(&self) -> Result<Pooled> {
+        self.database.get().map_err(Error::PoolingError)
+    }
+
+    pub fn sync(&mut self) -> Result<&Vec<UserId>> {
+        let admins: Vec<UserId> = self
+            .conn()?
+            .transaction(|c| {
+                use schema::users::dsl::*;
+                users
+                    .filter(admin.is(true))
+                    .select(User::as_select())
+                    .load(c)
+            })
+            .map_err(Error::DatabaseError)?
+            .iter()
+            .to_owned()
+            .map(|u| u.to_telegram_id())
+            .collect();
+
+        self.admins = [
+            admins,
+            DEFACTO.iter().map(|u| UserId(u.to_owned())).collect(),
+        ]
+        .concat();
+
+        Ok(&self.admins)
+    }
+
+    pub fn add_admin(&mut self) -> Result<()> {
+        Ok(())
     }
 }

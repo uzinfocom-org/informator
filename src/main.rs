@@ -5,7 +5,6 @@ use informator::config::{Config, Field};
 use informator::error::Result;
 use informator::storage::Storage;
 use informator::{Cli, Commands};
-use std::sync::Arc;
 use teloxide::{prelude::*, update_listeners::webhooks};
 
 #[tokio::main]
@@ -35,16 +34,14 @@ async fn executor_task() -> Result<()> {
     match args.command {
         Commands::Polling { token, database } => {
             // Database instance
-            let storage = Arc::new(
-                Storage::new()
-                    .connect(database.to_str())
-                    .await?
-                    .migrate()
-                    .await?
-                    .sync()
-                    .await?
-                    .build()?,
-            );
+            let storage = Storage::new()
+                .connect(database.to_str())
+                .await?
+                .migrate()
+                .await?
+                .sync()
+                .await?
+                .build()?;
 
             // Dependencies
             let deps = dptree::deps![storage];
@@ -70,16 +67,14 @@ async fn executor_task() -> Result<()> {
             port,
         } => {
             // Database instance
-            let storage = Arc::new(
-                Storage::new()
-                    .connect(database.to_str())
-                    .await?
-                    .migrate()
-                    .await?
-                    .sync()
-                    .await?
-                    .build()?,
-            );
+            let storage = Storage::new()
+                .connect(database.to_str())
+                .await?
+                .migrate()
+                .await?
+                .sync()
+                .await?
+                .build()?;
 
             // Dependencies
             let deps = dptree::deps![storage];
@@ -119,16 +114,14 @@ async fn executor_task() -> Result<()> {
         }
         Commands::Env => {
             // Database instance
-            let storage = Arc::new(
-                Storage::new()
-                    .connect(None)
-                    .await?
-                    .migrate()
-                    .await?
-                    .sync()
-                    .await?
-                    .build()?,
-            );
+            let storage = Storage::new()
+                .connect(None)
+                .await?
+                .migrate()
+                .await?
+                .sync()
+                .await?
+                .build()?;
 
             // Dependencies
             let deps = dptree::deps![storage];
