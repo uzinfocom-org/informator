@@ -1,7 +1,8 @@
 use diesel::prelude::*;
+use serde::{Deserialize, Serialize};
 use teloxide::types::UserId;
 
-#[derive(Queryable, Selectable)]
+#[derive(Queryable, Selectable, Serialize, Deserialize)]
 #[diesel(table_name = super::schema::posts)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct Post {
@@ -10,7 +11,7 @@ pub struct Post {
     pub selection: String,
 }
 
-#[derive(Queryable, Selectable)]
+#[derive(Queryable, Selectable, Serialize, Deserialize)]
 #[diesel(table_name = super::schema::users)]
 #[diesel(check_for_backend(diesel::sqlite::Sqlite))]
 pub struct User {
@@ -19,7 +20,7 @@ pub struct User {
 }
 
 impl User {
-    pub fn to_telegram_id(self) -> UserId {
+    pub fn to_telegram_id(&self) -> UserId {
         UserId(self.id as u64)
     }
 }

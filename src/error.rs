@@ -18,7 +18,7 @@ pub enum Error {
     #[error("database url where?! {0}")]
     NoDatabaseUrl(#[from] VarError),
     #[error("trouble with db connection: {0}")]
-    DatabaseError(#[from] diesel::ConnectionError),
+    DatabaseError(#[from] diesel::result::Error),
     #[error("trouble while creating pool of connections: {0}")]
     PoolingError(#[from] r2d2::Error),
     #[error("trouble while migrating migrations.")]

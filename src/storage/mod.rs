@@ -5,14 +5,13 @@ pub mod schema;
 
 use crate::error::{Error, Result};
 use diesel::{
-    QueryDsl, RunQueryDsl, SelectableHelper, SqliteConnection, SqliteExpressionMethods,
+    Connection, QueryDsl, RunQueryDsl, SelectableHelper, SqliteConnection, SqliteExpressionMethods,
     r2d2::{ConnectionManager, Pool},
 };
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 use models::*;
 use std::{env, marker::PhantomData};
 use teloxide::types::UserId;
-
 // Aliases
 pub type Pooling = Pool<ConnectionManager<SqliteConnection>>;
 
@@ -88,21 +87,29 @@ impl Builder<Migrating> {
 }
 
 impl Builder<Syncing> {
-    pub async fn sync(mut self) -> Result<Builder<Finalizing>> {
+    pub async fn sync(self) -> Result<Builder<Finalizing>> {
         let mut connection = self
             .database
             .as_ref()
             .ok_or(Error::NoDatabaseInstance)?
             .get()?;
 
-        use schema::users::dsl::*;
-        let mut admins = users
-            .filter(admin.is(true))
-            .select(User::as_select())
-            .load(&connection)?;
+        let admins: Vec<UserId> = connection
+            .transaction(|c| {
+                use schema::users::dsl::*;
+                users
+                    .filter(admin.is(true))
+                    .select(User::as_select())
+                    .load(c)
+            })
+            .map_err(Error::DatabaseError)?
+            .iter()
+            .to_owned()
+            .map(|u| u.to_telegram_id())
+            .collect();
 
         Ok(Builder {
-            admins: self.admins.append(&admins),
+            admins,
             database: self.database,
             _initialized: PhantomData,
         })
