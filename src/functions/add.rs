@@ -36,7 +36,7 @@ pub async fn command(bot: &Bot, msg: &Message, mut db: Storage) -> ResponseResul
         Ok(u) => {
             bot.send_message_tf(
                 msg.chat.id,
-                format!("Add the user {} into the admins, aight...", u.id),
+                format!("Added the user {} into the admins, aight...", u.id),
                 msg,
             )
             .parse_mode(ParseMode::Html)

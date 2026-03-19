@@ -191,6 +191,7 @@ impl Storage {
                     .values(User {
                         id: user.0 as i64,
                         admin: true,
+                        language: "en".to_string(),
                     })
                     .returning(User::as_returning())
                     .get_result(c)
