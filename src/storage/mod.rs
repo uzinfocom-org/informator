@@ -8,7 +8,7 @@ use crate::{
     storage::schema::users,
 };
 use diesel::{
-    Connection, QueryDsl, RunQueryDsl, SelectableHelper, SqliteConnection, SqliteExpressionMethods,
+    QueryDsl, RunQueryDsl, SelectableHelper, SqliteConnection, SqliteExpressionMethods,
     r2d2::{ConnectionManager, Pool},
 };
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
@@ -99,20 +99,17 @@ impl Builder<Migrating> {
 
 impl Builder<Syncing> {
     pub async fn sync(self) -> Result<Builder<Finalizing>> {
-        let mut connection = self
-            .database
-            .as_ref()
-            .ok_or(Error::NoDatabaseInstance)?
-            .get()?;
-
-        let admins: Vec<UserId> = connection
-            .transaction(|c| {
-                use schema::users::dsl::*;
-                users
-                    .filter(admin.is(true))
-                    .select(User::as_select())
-                    .load(c)
-            })
+        use schema::users::dsl::*;
+        let admins: Vec<UserId> = users
+            .filter(admin.is(true))
+            .select(User::as_select())
+            .load(
+                &mut self
+                    .database
+                    .as_ref()
+                    .ok_or(Error::NoDatabaseInstance)?
+                    .get()?,
+            )
             .map_err(Error::DatabaseError)?
             .iter()
             .to_owned()
@@ -146,15 +143,11 @@ impl Storage {
     }
 
     pub fn sync(&mut self) -> Result<&Vec<UserId>> {
-        let admins: Vec<UserId> = self
-            .conn()?
-            .transaction(|c| {
-                use schema::users::dsl::*;
-                users
-                    .filter(admin.is(true))
-                    .select(User::as_select())
-                    .load(c)
-            })
+        use schema::users::dsl::*;
+        let admins: Vec<UserId> = users
+            .filter(admin.is(true))
+            .select(User::as_select())
+            .load(&mut self.database.get()?)
             .map_err(Error::DatabaseError)?
             .iter()
             .to_owned()
@@ -185,17 +178,14 @@ impl Storage {
             ));
         }
 
-        self.conn()?
-            .transaction(|c| {
-                diesel::insert_into(users::table)
-                    .values(User {
-                        id: user.0 as i64,
-                        admin: true,
-                        language: "en".to_string(),
-                    })
-                    .returning(User::as_returning())
-                    .get_result(c)
+        diesel::insert_into(users::table)
+            .values(User {
+                id: user.0 as i64,
+                admin: true,
+                language: "en".to_string(),
             })
+            .returning(User::as_returning())
+            .get_result(&mut self.database.get()?)
             .map_err(Error::DatabaseError)
     }
 }
