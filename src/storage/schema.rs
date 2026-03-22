@@ -11,6 +11,7 @@ diesel::table! {
 diesel::table! {
     users (id) {
         id -> BigInt,
+        chat -> Nullable<BigInt>,
         admin -> Bool,
         language -> Text,
     }

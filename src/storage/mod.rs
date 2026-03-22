@@ -3,19 +3,17 @@
 pub mod models;
 pub mod schema;
 
-use crate::{
-    error::{Error, Result},
-    storage::schema::users,
-};
+use crate::error::{Error, Result};
 use diesel::{
-    QueryDsl, RunQueryDsl, SelectableHelper, SqliteConnection, SqliteExpressionMethods,
+    ExpressionMethods, QueryDsl, RunQueryDsl, SelectableHelper, SqliteConnection,
+    SqliteExpressionMethods,
     r2d2::{ConnectionManager, Pool},
 };
 use diesel_migrations::{EmbeddedMigrations, MigrationHarness, embed_migrations};
 use models::*;
 use r2d2::PooledConnection;
-use std::{env, marker::PhantomData};
-use teloxide::types::UserId;
+use std::marker::PhantomData;
+use teloxide::types::{ChatId, UserId};
 
 // Aliases
 pub type Pooling = Pool<ConnectionManager<SqliteConnection>>;
@@ -28,18 +26,15 @@ pub const MIGRATIONS: EmbeddedMigrations = embed_migrations!("migrations");
 // Marker for builder (by order)
 pub struct Initializing; // first ensure db exists or can be connected
 pub struct Migrating; // then make sure we are catching up with migrations
-pub struct Syncing; // if there are other states, sync with db for caching
 pub struct Finalizing; // finally, ready to get started!
 
 #[derive(Debug, Clone)]
 pub struct Storage {
-    admins: Vec<UserId>,
     database: Pool<ConnectionManager<SqliteConnection>>,
 }
 
 #[derive(Debug, Clone)]
 pub struct Builder<State> {
-    admins: Vec<UserId>,
     database: Option<Pooling>,
     _initialized: PhantomData<State>,
 }
@@ -52,7 +47,6 @@ unsafe impl Sync for Storage {}
 impl Default for Builder<Initializing> {
     fn default() -> Self {
         Self {
-            admins: DEFACTO.iter().map(|u| UserId(u.to_owned())).collect(),
             database: None,
             _initialized: PhantomData,
         }
@@ -60,74 +54,43 @@ impl Default for Builder<Initializing> {
 }
 
 impl Builder<Initializing> {
-    pub async fn connect(self, path: Option<&str>) -> Result<Builder<Migrating>> {
-        let path = match path {
-            Some(p) => p,
-            None => &env::var("DATABASE_URL").map_err(Error::NoDatabaseUrl)?,
-        };
-
-        let manager = ConnectionManager::<SqliteConnection>::new(path);
-        let instance = Pool::builder()
-            .max_size(10)
-            .build(manager)
-            .map_err(Error::PoolingError)?;
-
-        Ok(Builder {
-            admins: self.admins,
-            database: Some(instance),
-            _initialized: PhantomData,
-        })
+    pub async fn connect(
+        self,
+        path: Option<&str>,
+    ) -> std::result::Result<Builder<Migrating>, Error> {
+        path.ok_or(Error::NoDatabaseUrl)
+            .and_then(|p| Ok(ConnectionManager::<SqliteConnection>::new(p)))
+            .and_then(|c| {
+                Pool::builder()
+                    .max_size(10)
+                    .build(c)
+                    .map_err(Error::PoolingError)
+            })
+            .and_then(|p| Builder {
+                database: {},
+                _initialized: PhantomData,
+            })
     }
 }
 
 impl Builder<Migrating> {
-    pub async fn migrate(self) -> Result<Builder<Syncing>> {
+    pub async fn migrate(self) -> Result<Builder<Finalizing>> {
         self.database
             .as_ref()
             .ok_or(Error::NoDatabaseInstance)?
             .get()?
             .run_pending_migrations(MIGRATIONS)
-            .map_err(|_| Error::MigrationError)?;
-
-        Ok(Builder {
-            admins: self.admins,
-            database: self.database,
-            _initialized: PhantomData,
-        })
-    }
-}
-
-impl Builder<Syncing> {
-    pub async fn sync(self) -> Result<Builder<Finalizing>> {
-        use schema::users::dsl::*;
-        let admins: Vec<UserId> = users
-            .filter(admin.is(true))
-            .select(User::as_select())
-            .load(
-                &mut self
-                    .database
-                    .as_ref()
-                    .ok_or(Error::NoDatabaseInstance)?
-                    .get()?,
-            )
-            .map_err(Error::DatabaseError)?
-            .iter()
-            .to_owned()
-            .map(|u| u.to_telegram_id())
-            .collect();
-
-        Ok(Builder {
-            admins: [self.admins, admins].concat(),
-            database: self.database,
-            _initialized: PhantomData,
-        })
+            .map(|_| Builder {
+                database: self.database,
+                _initialized: PhantomData,
+            })
+            .map_err(|_| Error::MigrationError)
     }
 }
 
 impl Builder<Finalizing> {
     pub fn build(self) -> Result<Storage> {
         Ok(Storage {
-            admins: self.admins,
             database: self.database.ok_or(Error::NoDatabaseInstance)?,
         })
     }
@@ -142,50 +105,93 @@ impl Storage {
         self.database.get().map_err(Error::PoolingError)
     }
 
-    pub fn sync(&mut self) -> Result<&Vec<UserId>> {
+    pub fn admins(&self) -> Result<Vec<User>> {
         use schema::users::dsl::*;
-        let admins: Vec<UserId> = users
+        users
             .filter(admin.is(true))
+            .select(User::as_select())
+            .load(&mut self.database.get()?)
+            .map_err(Error::DatabaseError)
+    }
+
+    pub fn is_admin(&self, _user: UserId) -> Result<bool> {
+        use schema::users::dsl::*;
+        Ok(users
+            .filter(id.eq(_user.0 as i64))
+            .filter(admin.eq(true))
             .select(User::as_select())
             .load(&mut self.database.get()?)
             .map_err(Error::DatabaseError)?
             .iter()
-            .to_owned()
-            .map(|u| u.to_telegram_id())
-            .collect();
-
-        self.admins = [
-            admins,
-            DEFACTO.iter().map(|u| UserId(u.to_owned())).collect(),
-        ]
-        .concat();
-
-        Ok(&self.admins)
+            .map(UserId::from)
+            .collect::<Vec<UserId>>()
+            .contains(&_user))
     }
 
-    pub fn add_admin(&mut self, user: UserId) -> Result<User> {
-        self.sync()?;
+    pub fn admin_ids(&self) -> Result<Vec<UserId>> {
+        Ok(self
+            .admins()?
+            .iter()
+            .map(|user| user.id)
+            .map(|n| UserId(n.to_owned() as u64))
+            .collect::<Vec<UserId>>())
+    }
 
-        if DEFACTO.contains(&user.0) {
-            return Err(Error::ProxyError(
-                "User already is a DEFACTO admin!".to_string(),
-            ));
+    pub fn admin_chats(&self) -> Result<Vec<ChatId>> {
+        Ok(self
+            .admins()?
+            .iter()
+            .map(|user| user.chat)
+            .filter(|ch| ch.is_some())
+            .collect::<Option<Vec<i64>>>()
+            .ok_or(Error::WeirdChatId)?
+            .iter()
+            .map(|n| ChatId(n.to_owned()))
+            .collect::<Vec<ChatId>>())
+    }
+
+    pub fn exists(&self, _user: UserId) -> Result<bool> {
+        use schema::users::dsl::*;
+        Ok(users
+            .filter(id.eq(_user.0 as i64))
+            .select(User::as_select())
+            .load(&mut self.database.get()?)
+            .map_err(Error::DatabaseError)?
+            .iter()
+            .map(UserId::from)
+            .collect::<Vec<UserId>>()
+            .contains(&_user))
+    }
+
+    pub fn add_user(&mut self, _user: UserId, _chat: ChatId) -> Result<User> {
+        use schema::users::{self};
+        match self.exists(_user)? {
+            true => Err(Error::ReturningUser),
+            false => diesel::insert_into(users::table)
+                .values(User {
+                    id: _user.0 as i64,
+                    chat: Some(_chat.0),
+                    admin: DEFACTO.contains(&_user.0),
+                    language: "en".to_string(),
+                })
+                .returning(User::as_returning())
+                .get_result(&mut self.database.get()?)
+                .map_err(Error::DatabaseError),
         }
+    }
 
-        if self.admins.contains(&user) {
-            return Err(Error::ProxyError(
+    pub fn add_admin(&mut self, _user: UserId) -> Result<()> {
+        use schema::users::dsl::*;
+        match self.is_admin(_user)? {
+            true => Err(Error::ProxyError(
                 "User already is in admins list!".to_string(),
-            ));
+            )),
+            false => diesel::update(users)
+                .filter(id.lt(_user.0 as i64))
+                .set(admin.eq(true))
+                .execute(&mut self.database.get()?)
+                .map_err(Error::DatabaseError)
+                .map(|_| ()),
         }
-
-        diesel::insert_into(users::table)
-            .values(User {
-                id: user.0 as i64,
-                admin: true,
-                language: "en".to_string(),
-            })
-            .returning(User::as_returning())
-            .get_result(&mut self.database.get()?)
-            .map_err(Error::DatabaseError)
     }
 }

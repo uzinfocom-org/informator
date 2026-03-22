@@ -10,6 +10,14 @@ pub type Insane = Box<dyn std::error::Error + Send + Sync>;
 /// Sanity Destroyer 3000
 pub type Insult<T> = std::result::Result<T, Insane>;
 
+pub struct ErrorStruct(Option<String>);
+
+impl From<VarError> for ErrorStruct {
+    fn from(value: VarError) -> Self {
+        Self(Some(value.to_string()))
+    }
+}
+
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("Are you SURE that database is initialized?!")]
@@ -24,8 +32,12 @@ pub enum Error {
     MigrationError,
     #[error("trouble with parsing number: {0}")]
     ParseIntError(#[from] ParseIntError),
+    #[error("this chat_id seems very weird")]
+    WeirdChatId,
     #[error("is this really a valid db path?")]
     InvalidPath,
+    #[error("this user seems to be already in database.")]
+    ReturningUser,
     #[error("{0}")] // passing string for a reason
     ProxyError(String),
 

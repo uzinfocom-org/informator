@@ -13,7 +13,6 @@
 let
   # Helpful nix function
   lib = pkgs.lib;
-  getLibFolder = pkg: "${pkg}/lib";
 
   # Manifest via Cargo.toml
   manifest = (pkgs.lib.importTOML ./Cargo.toml).package;
@@ -57,12 +56,6 @@ pkgs.rustPlatform.buildRustPackage {
   # Set Environment Variables
   RUST_BACKTRACE = 1;
   RUST_SRC_PATH = "${pkgs.rust.packages.stable.rustPlatform.rustLibSrc}";
-
-  # Compiler LD variables
-  NIX_LDFLAGS = "-L${(getLibFolder pkgs.libiconv)}";
-  LD_LIBRARY_PATH = pkgs.lib.makeLibraryPath [
-    pkgs.libiconv
-  ];
 
   meta = with lib; {
     homepage = manifest.homepage;

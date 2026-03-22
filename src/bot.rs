@@ -15,9 +15,6 @@ pub enum Command {
     /// Starting point of the bot
     Start,
 
-    /// Synchronize admins with cache
-    Sync,
-
     /// Add an admin user
     Add,
 }
