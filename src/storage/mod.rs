@@ -54,20 +54,17 @@ impl Default for Builder<Initializing> {
 }
 
 impl Builder<Initializing> {
-    pub async fn connect(
-        self,
-        path: Option<&str>,
-    ) -> std::result::Result<Builder<Migrating>, Error> {
+    pub async fn connect(self, path: Option<&str>) -> Result<Builder<Migrating>> {
         path.ok_or(Error::NoDatabaseUrl)
-            .and_then(|p| Ok(ConnectionManager::<SqliteConnection>::new(p)))
+            .map(ConnectionManager::<SqliteConnection>::new)
             .and_then(|c| {
                 Pool::builder()
                     .max_size(10)
                     .build(c)
                     .map_err(Error::PoolingError)
             })
-            .and_then(|p| Builder {
-                database: {},
+            .map(|p| Builder {
+                database: Some(p),
                 _initialized: PhantomData,
             })
     }

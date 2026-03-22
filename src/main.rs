@@ -39,8 +39,6 @@ async fn executor_task() -> Result<()> {
                 .await?
                 .migrate()
                 .await?
-                .sync()
-                .await?
                 .build()?;
 
             // Dependencies
@@ -71,8 +69,6 @@ async fn executor_task() -> Result<()> {
                 .connect(database.to_str())
                 .await?
                 .migrate()
-                .await?
-                .sync()
                 .await?
                 .build()?;
 
@@ -118,8 +114,6 @@ async fn executor_task() -> Result<()> {
                 .connect(None)
                 .await?
                 .migrate()
-                .await?
-                .sync()
                 .await?
                 .build()?;
 

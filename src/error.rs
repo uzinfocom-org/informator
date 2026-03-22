@@ -1,4 +1,4 @@
-use std::{env::VarError, num::ParseIntError};
+use std::num::ParseIntError;
 use thiserror::Error;
 
 /// Normal fucking Result
@@ -10,20 +10,12 @@ pub type Insane = Box<dyn std::error::Error + Send + Sync>;
 /// Sanity Destroyer 3000
 pub type Insult<T> = std::result::Result<T, Insane>;
 
-pub struct ErrorStruct(Option<String>);
-
-impl From<VarError> for ErrorStruct {
-    fn from(value: VarError) -> Self {
-        Self(Some(value.to_string()))
-    }
-}
-
 #[derive(Error, Debug)]
 pub enum Error {
     #[error("Are you SURE that database is initialized?!")]
     NoDatabaseInstance,
-    #[error("database url where?! {0}")]
-    NoDatabaseUrl(#[from] VarError),
+    #[error("database url where?!")]
+    NoDatabaseUrl,
     #[error("trouble with db connection: {0}")]
     DatabaseError(#[from] diesel::result::Error),
     #[error("trouble while creating pool of connections: {0}")]
